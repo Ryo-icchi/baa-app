@@ -1,0 +1,16 @@
+{
+  "name": "ばあ！",
+  "short_name": "ばあ！",
+  "description": "1歳児向けの いないいないばあ 遊びアプリ。写真と声は端末の中だけに保存されます。",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#ffe9a8",
+  "theme_color": "#ffe9a8",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

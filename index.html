@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>ばあ！</title>
+<meta name="description" content="1歳児向けの「いないいないばあ」遊びアプリ。写真と声は端末の中だけに保存されます。">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ばあ！">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ============ 子ども層（メイン画面） ============ -->
+<main id="stage" aria-label="いないいないばあ あそび">
+  <div id="sky"></div>
+
+  <div class="scene">
+    <div class="frame" id="frame">
+      <!-- とびらの奥（写真 / イラスト） -->
+      <div class="reveal" id="reveal"></div>
+      <!-- とびら -->
+      <div class="door" id="door">
+        <div class="door-face">
+          <div class="door-window"></div>
+          <div class="door-knob"></div>
+        </div>
+      </div>
+    </div>
+    <div class="name-label" id="nameLabel"></div>
+  </div>
+
+  <div id="sparkles"></div>
+</main>
+
+<!-- 親メニューへの2段ゲート: 長押しで出現する小ボタン -->
+<button id="adultBtn" class="hidden" aria-label="おとなメニュー">おとな</button>
+
+<!-- ============ おやすみ層 ============ -->
+<div id="night" class="hidden">
+  <div class="moon"></div>
+  <div class="stars" id="stars"></div>
+  <div class="night-msg">おやすみなさい…</div>
+  <div class="zzz">z z Z</div>
+</div>
+
+<!-- ============ 親メニュー層 ============ -->
+<div id="parentPanel" class="hidden">
+  <div class="panel-inner">
+    <div class="panel-header">
+      <h1>おとなメニュー</h1>
+      <button id="closePanel" class="btn ghost">とじる ✕</button>
+    </div>
+
+    <section class="card">
+      <h2>あたらしく とうろく</h2>
+      <p class="hint">お子さんが知っているもの（ぬいぐるみ・家族・ペット）の写真がおすすめです。</p>
+      <div class="reg-row">
+        <label class="btn primary" for="photoInput">📷 しゃしんを えらぶ</label>
+        <input type="file" id="photoInput" accept="image/*" hidden>
+      </div>
+      <div id="regPreviewWrap" class="hidden">
+        <img id="regPreview" alt="プレビュー">
+        <input type="text" id="regName" placeholder="なまえ（例: アンパンマンのぬいぐるみ）" maxlength="20">
+        <div class="reg-row">
+          <button id="recBtn" class="btn">🎙 こえを ろくおん</button>
+          <button id="recPlayBtn" class="btn hidden">▶ きく</button>
+        </div>
+        <p class="hint">「ばあ！」「〇〇だよ！」など短くひとこと。録音はあとからでもOK。</p>
+        <div class="reg-row">
+          <button id="saveItemBtn" class="btn primary">💾 ほぞんする</button>
+          <button id="cancelRegBtn" class="btn ghost">やめる</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>とうろくずみ（<span id="itemCount">0</span>）</h2>
+      <div id="itemList" class="item-list"></div>
+      <p class="hint" id="noItemsHint">まだ登録がありません。最初は内蔵のどうぶつたちが出てきます。</p>
+    </section>
+
+    <section class="card">
+      <h2>せってい</h2>
+      <label class="toggle-row">
+        <input type="checkbox" id="soundToggle" checked>
+        <span>おとを ならす（電車・機内ではOFFに）</span>
+      </label>
+      <button id="goodnightBtn" class="btn night-btn">🌙 おやすみモードにする</button>
+      <p class="hint">おやすみモードからは画面を2秒長押しで戻れます。</p>
+    </section>
+
+    <section class="card">
+      <h2>つかいかた メモ</h2>
+      <ul class="hint">
+        <li>画面のどこを触っても とびらが開きます（ボタンを狙う必要なし）</li>
+        <li>このメニューは「画面を2秒長押し → 右上の「おとな」をタップ」で開きます</li>
+        <li>iPhone/iPadの<strong>アクセスガイド</strong>（設定→アクセシビリティ）を併用すると、ホームに戻る等の誤操作を防げます</li>
+        <li>写真と声はこの端末の中だけに保存され、外部には送信されません</li>
+      </ul>
+    </section>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
