@@ -1,5 +1,5 @@
 /* オフライン対応 Service Worker（機内モードでも遊べるように全シェルをキャッシュ） */
-const CACHE = "baa-v3";
+const CACHE = "baa-v4";
 const ASSETS = [
   "./",
   "./index.html",
@@ -9,12 +9,6 @@ const ASSETS = [
   "./icons/icon-180.png",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
-  "./assets/animals/rabbit.png",
-  "./assets/animals/chick.png",
-  "./assets/animals/dog.png",
-  "./assets/animals/penguin.png",
-  "./assets/animals/elephant.png",
-  "./assets/animals/panda.png",
 ];
 
 self.addEventListener("install", (e) => {

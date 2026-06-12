@@ -3,6 +3,15 @@
 const CDP = "http://127.0.0.1:9333";
 const APP = "http://127.0.0.1:8899/index.html";
 
+// ⚠️ 同アプリの残留タブを先に閉じる: 残ったタブの IndexedDB 接続が deleteDatabase を
+//    永久ブロックし、リロード後の indexedDB.open がハングする（2026-06-12 実際に発生）
+const existing = await (await fetch(`${CDP}/json/list`)).json();
+for (const t of existing) {
+  if (t.type === "page" && t.url.includes("127.0.0.1:8899")) {
+    await fetch(`${CDP}/json/close/${t.id}`);
+  }
+}
+
 const res = await fetch(`${CDP}/json/new?${encodeURIComponent(APP)}`, { method: "PUT" });
 const target = await res.json();
 const ws = new WebSocket(target.webSocketDebuggerUrl);
@@ -45,8 +54,19 @@ await send("Runtime.enable");
 await send("Page.enable");
 await waitReady();
 
-// テストをべき等にするため毎回 DB を初期化してリロード
-await evalJs("new Promise(r => { const q = indexedDB.deleteDatabase('baa-db'); q.onsuccess = q.onerror = q.onblocked = () => r(true); })", true);
+// テストをべき等にするため毎回 DB・SWキャッシュを初期化してリロード
+// ⚠️ SWキャッシュ削除は必須: cache-first SW が前回テスト時の古い app.js を返し
+//    「最新コードを検証したつもり」になる（2026-06-12 実際に発生）
+// ⚠️ deleteDatabase の前に必ず db.close(): 接続を開いたまま消すと blocked になり
+//    リロード後の新接続とレースして保存系テストが壊れる（2026-06-12 実際に発生）
+await evalJs(`(async () => {
+  try { if (db) db.close(); } catch (e) {}
+  await new Promise(r => { const q = indexedDB.deleteDatabase('baa-db'); q.onsuccess = q.onerror = q.onblocked = () => r(); });
+  await caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k))));
+  const regs = await navigator.serviceWorker.getRegistrations();
+  await Promise.all(regs.map(r => r.unregister()));
+  return true;
+})()`, true);
 await send("Page.reload");
 await sleep(1200);
 await waitReady();
@@ -55,16 +75,15 @@ console.log("1. 初期化");
 check("state が存在", await evalJs("typeof state === 'object'"));
 check("再生キューが構築済み", await evalJs("state.queue.length >= 0 && state.current !== null"));
 check("とびらの奥にコンテンツ描画済み", await evalJs("document.getElementById('reveal').innerHTML.length > 10"));
-check("内蔵どうぶつ7種（くま+Kenney6種）", await evalJs("BUILTINS.length === 7"));
+check("内蔵どうぶつ8種（すべてオリジナルSVG）", await evalJs("BUILTINS.length === 8 && BUILTINS.every(b => b.svg && !b.img)"));
 check("初期状態でとびらは閉", await evalJs("state.doorOpen === false"));
 
 console.log("2. 内蔵イラストの描画");
-await evalJs("state.current = BUILTINS[1]; renderItem(BUILTINS[1])"); // うさぎ（Kenney画像）
-await sleep(600);
-check("Kenney画像が builtin-img として読み込まれる", await evalJs("(() => { const i = document.querySelector('#reveal img.builtin-img'); return !!i && i.complete && i.naturalWidth > 0; })()"));
-check("パステル背景が適用される", await evalJs("document.getElementById('reveal').style.background !== ''"));
+await evalJs("state.current = BUILTINS[5]; renderItem(BUILTINS[5])"); // ぺんぎん
+await sleep(300);
+check("内蔵SVGが描画される", await evalJs("!!document.querySelector('#reveal svg')"));
 await evalJs("state.current = BUILTINS[0]; renderItem(BUILTINS[0])");
-check("くまさんはSVGのまま", await evalJs("!!document.querySelector('#reveal svg')"));
+check("くまさんもSVGで描画", await evalJs("!!document.querySelector('#reveal svg rect')"));
 
 console.log("3. タップ → とびら開閉");
 await evalJs("onChildTap()");
@@ -123,7 +142,7 @@ await sleep(1500);
 await waitReady();
 check("リロード後も登録アイテムが残る", await evalJs("state.items.length === 1 && state.items[0].name === 'てすと'"));
 check("写真Blobも復元", await evalJs("state.items[0].photo instanceof Blob && state.items[0].photo.size > 0"));
-check("キューは登録1+内蔵7の8件", await evalJs("state.queue.length + 1 === 8")); // current に1件出ている
+check("キューは登録1+内蔵8の9件", await evalJs("state.queue.length + 1 === 9")); // current に1件出ている
 
 console.log("9. おやすみモード");
 await evalJs("enterNight()");
@@ -135,8 +154,8 @@ check("長押しで解除", await evalJs("document.getElementById('night').class
 console.log("10. Service Worker / オフライン資産");
 await sleep(1000);
 check("SW登録成功", await evalJs("navigator.serviceWorker.getRegistration().then(r => !!r)", true));
-check("SW ASSETS に動物画像6種が含まれる", await evalJs("fetch('sw.js').then(r => r.text()).then(t => ['rabbit','chick','dog','penguin','elephant','panda'].every(n => t.includes(`animals/${n}.png`)))", true));
 
 console.log(`\n結果: ${pass} passed / ${fail} failed`);
 ws.close();
+await fetch(`${CDP}/json/close/${target.id}`).catch(() => {});
 process.exit(fail > 0 ? 1 : 0);

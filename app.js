@@ -21,15 +21,19 @@ const state = {
 const audioPlayer = new Audio();
 const audioUrlCache = new Map(); // itemId -> objectURL
 
-// ============ 内蔵イラスト ============
-// くまさん: オリジナルSVG（Ryoお気に入りのため温存）
-// その他: Kenney Animal Pack Redux（CC0・kenney.nl）の Round (outline) を512pxに事前拡大
+// ============ 内蔵イラスト（すべてオリジナルSVG・くまさんの作画文法で統一） ============
+// 文法: フラット2トーン（体色+明るい差し色）/ 目=黒丸r3.5 / 鼻=黒楕円 /
+//       口=「M x y q-5 6 -9 2」の左右カーブ / 頭=中央の大きな円 / 輪郭線なし
 function animalSvg(bg, face) {
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  // preserveAspectRatio=slice: インラインSVGはobject-fit非対応のため、cover相当の指定で
+  // 縦長の「とびらの奥」を背景色で満たす（meetのままだと上下にレターボックス帯が出る）
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">
     <rect width="100" height="100" fill="${bg}"/>${face}</svg>`;
 }
-const EYES = (y = 46) =>
-  `<circle cx="38" cy="${y}" r="3.5" fill="#3a2a1a"/><circle cx="62" cy="${y}" r="3.5" fill="#3a2a1a"/>`;
+const EYES = (y = 46, x1 = 38, x2 = 62) =>
+  `<circle cx="${x1}" cy="${y}" r="3.5" fill="#3a2a1a"/><circle cx="${x2}" cy="${y}" r="3.5" fill="#3a2a1a"/>`;
+const MOUTH = (x = 50, y = 62) =>
+  `<path d="M${x} ${y} q-5 6 -9 2 M${x} ${y} q5 6 9 2" stroke="#3a2a1a" stroke-width="2" fill="none" stroke-linecap="round"/>`;
 const BUILTINS = [
   {
     id: "builtin-bear", builtin: true, name: "くまさん",
@@ -39,14 +43,77 @@ const BUILTINS = [
       <circle cx="50" cy="52" r="30" fill="#b07a45"/>
       <ellipse cx="50" cy="62" rx="13" ry="10" fill="#e8b888"/>
       ${EYES()}<ellipse cx="50" cy="58" rx="4.5" ry="3.5" fill="#3a2a1a"/>
-      <path d="M50 62 q-5 6 -9 2 M50 62 q5 6 9 2" stroke="#3a2a1a" stroke-width="2" fill="none" stroke-linecap="round"/>`),
+      ${MOUTH()}`),
   },
-  { id: "builtin-rabbit",   builtin: true, name: "うさぎさん",  img: "assets/animals/rabbit.png",   bg: "#ffe4ef" },
-  { id: "builtin-chick",    builtin: true, name: "ひよこさん",  img: "assets/animals/chick.png",    bg: "#e3f4ff" },
-  { id: "builtin-dog",      builtin: true, name: "わんわん",    img: "assets/animals/dog.png",      bg: "#fff1d6" },
-  { id: "builtin-penguin",  builtin: true, name: "ぺんぎんさん", img: "assets/animals/penguin.png",  bg: "#e8f0ff" },
-  { id: "builtin-elephant", builtin: true, name: "ぞうさん",    img: "assets/animals/elephant.png", bg: "#e8f4e0" },
-  { id: "builtin-panda",    builtin: true, name: "ぱんださん",  img: "assets/animals/panda.png",    bg: "#ffece3" },
+  {
+    id: "builtin-cat", builtin: true, name: "ねこさん",
+    svg: animalSvg("#dff3ff", `
+      <path d="M24 40 L28 12 L47 28 Z" fill="#a9a9bb"/><path d="M76 40 L72 12 L53 28 Z" fill="#a9a9bb"/>
+      <path d="M29 33 L31.5 18 L42 27 Z" fill="#e0e0ea"/><path d="M71 33 L68.5 18 L58 27 Z" fill="#e0e0ea"/>
+      <circle cx="50" cy="54" r="29" fill="#a9a9bb"/>
+      <ellipse cx="50" cy="64" rx="13" ry="9" fill="#e6e6ef"/>
+      <path d="M19 53 L34 55 M20 63 L34 60 M81 53 L66 55 M80 63 L66 60" stroke="#8e8ea0" stroke-width="1.8" stroke-linecap="round"/>
+      ${EYES(48)}<path d="M46.5 59 L53.5 59 L50 63 Z" fill="#e8899b"/>
+      ${MOUTH(50, 63)}`),
+  },
+  {
+    id: "builtin-rabbit", builtin: true, name: "うさぎさん",
+    svg: animalSvg("#ffd9e8", `
+      <ellipse cx="37" cy="17" rx="8.5" ry="19" fill="#f7f3ec"/><ellipse cx="63" cy="17" rx="8.5" ry="19" fill="#f7f3ec"/>
+      <ellipse cx="37" cy="18" rx="4" ry="12" fill="#ffc4d8"/><ellipse cx="63" cy="18" rx="4" ry="12" fill="#ffc4d8"/>
+      <circle cx="50" cy="56" r="29" fill="#f7f3ec"/>
+      ${EYES(50)}<ellipse cx="50" cy="60" rx="4" ry="3" fill="#f08aa2"/>
+      ${MOUTH(50, 63)}`),
+  },
+  {
+    id: "builtin-chick", builtin: true, name: "ひよこさん",
+    svg: animalSvg("#dff2ff", `
+      <circle cx="50" cy="55" r="29" fill="#ffd94d"/>
+      <path d="M46 27 q4 -10 8 0" stroke="#e8b800" stroke-width="3" fill="none" stroke-linecap="round"/>
+      ${EYES(50)}
+      <path d="M43 58 L57 58 L50 66 Z" fill="#ff9c3f"/>`),
+  },
+  {
+    id: "builtin-dog", builtin: true, name: "わんわん",
+    svg: animalSvg("#fff1d6", `
+      <circle cx="50" cy="52" r="30" fill="#d9a268"/>
+      <ellipse cx="25" cy="38" rx="10" ry="17" fill="#9c6b32" transform="rotate(18 25 38)"/>
+      <ellipse cx="75" cy="38" rx="10" ry="17" fill="#9c6b32" transform="rotate(-18 75 38)"/>
+      <ellipse cx="50" cy="63" rx="14" ry="10" fill="#f7e8cd"/>
+      ${EYES()}<ellipse cx="50" cy="58" rx="4.5" ry="3.5" fill="#3a2a1a"/>
+      ${MOUTH()}`),
+  },
+  {
+    id: "builtin-penguin", builtin: true, name: "ぺんぎんさん",
+    svg: animalSvg("#e6f0fb", `
+      <circle cx="50" cy="52" r="30" fill="#4a5572"/>
+      <circle cx="40" cy="58" r="13" fill="#ffffff"/><circle cx="60" cy="58" r="13" fill="#ffffff"/>
+      <rect x="40" y="52" width="20" height="19" fill="#ffffff"/>
+      ${EYES(55, 40, 60)}
+      <path d="M44.5 60 L50 56.5 L55.5 60 L50 65 Z" fill="#ff9c3f"/>`),
+  },
+  {
+    id: "builtin-elephant", builtin: true, name: "ぞうさん",
+    svg: animalSvg("#e8f4e0", `
+      <circle cx="23" cy="50" r="15" fill="#93a1bc"/><circle cx="77" cy="50" r="15" fill="#93a1bc"/>
+      <circle cx="23" cy="50" r="9" fill="#ccd4e4"/><circle cx="77" cy="50" r="9" fill="#ccd4e4"/>
+      <circle cx="50" cy="52" r="27" fill="#b4bdd0"/>
+      ${EYES(46, 40, 60)}
+      <path d="M45.5 56 L54.5 56 Q55.5 69 58.5 77 Q60 82.5 55 84 Q49.5 85 47.3 77.5 Q44.8 67 45.5 56 Z" fill="#b4bdd0"/>
+      <ellipse cx="52.8" cy="80.5" rx="2.6" ry="1.8" fill="#8d9ab6" transform="rotate(18 52.8 80.5)"/>`),
+  },
+  {
+    id: "builtin-panda", builtin: true, name: "ぱんださん",
+    svg: animalSvg("#ffe9e0", `
+      <circle cx="28" cy="26" r="11" fill="#3f3f3f"/><circle cx="72" cy="26" r="11" fill="#3f3f3f"/>
+      <circle cx="50" cy="52" r="30" fill="#faf7f1"/>
+      <ellipse cx="38" cy="49" rx="7.5" ry="9" fill="#3f3f3f" transform="rotate(-14 38 49)"/>
+      <ellipse cx="62" cy="49" rx="7.5" ry="9" fill="#3f3f3f" transform="rotate(14 62 49)"/>
+      <circle cx="38.5" cy="48.5" r="2.8" fill="#ffffff"/><circle cx="61.5" cy="48.5" r="2.8" fill="#ffffff"/>
+      <circle cx="38.5" cy="48.8" r="1.7" fill="#3a2a1a"/><circle cx="61.5" cy="48.8" r="1.7" fill="#3a2a1a"/>
+      <ellipse cx="50" cy="60" rx="4.5" ry="3.5" fill="#3a2a1a"/>
+      ${MOUTH(50, 64)}`),
+  },
 ];
 
 // ============ IndexedDB ============
@@ -106,18 +173,8 @@ const sparkles = document.getElementById("sparkles");
 
 function renderItem(item) {
   reveal.classList.remove("pop");
-  reveal.style.background = item.bg || "#fff6e3";
-  if (item.builtin && item.svg) {
+  if (item.builtin) {
     reveal.innerHTML = item.svg;
-  } else if (item.builtin && item.img) {
-    // 内蔵イラスト: 顔だけの透過PNGなので contain でパステル背景の中央に置く
-    reveal.innerHTML = "";
-    const img = document.createElement("img");
-    img.src = item.img;
-    img.className = "builtin-img";
-    img.alt = "";
-    img.draggable = false;
-    reveal.appendChild(img);
   } else {
     reveal.innerHTML = "";
     const img = document.createElement("img");
