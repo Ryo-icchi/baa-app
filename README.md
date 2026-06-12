@@ -53,8 +53,13 @@ iOS の**アクセスガイド**を併用する:
 
 - 素の HTML/CSS/JS。ビルド不要
 - ローカル確認: `python3 -m http.server 8899` → http://localhost:8899
-- E2Eスモークテスト: ヘッドレスChrome + CDP（`/tmp/baa-cdp-test.mjs` 参照・24項目）
+- E2Eスモークテスト: `node test-e2e.mjs`（ヘッドレスChrome + CDP・30項目。事前に上記サーバーと `Chrome --headless --remote-debugging-port=9333` を起動）
 - デプロイ: `./deploy.sh`（GitHub Pages）。更新時は `sw.js` の `CACHE` バージョンを上げること
+
+## クレジット
+
+- 内蔵の動物イラスト（うさぎ・ひよこ・いぬ・ぺんぎん・ぞう・ぱんだ）: [Kenney Animal Pack Redux](https://kenney.nl/assets/animal-pack-redux)（CC0 / パブリックドメイン）
+- くまさんイラストとその他のUI: 本リポジトリのオリジナル
 
 ## 著作権について
 

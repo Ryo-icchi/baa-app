@@ -78,6 +78,14 @@ img { pointer-events: none; -webkit-user-drag: none; }
   object-fit: cover;
 }
 
+/* 内蔵イラスト（顔だけの透過PNG）はパステル背景の中央に大きめ配置 */
+.reveal img.builtin-img {
+  width: 76%;
+  height: 76%;
+  margin: 12%;
+  object-fit: contain;
+}
+
 .reveal.pop > * {
   animation: pop .9s cubic-bezier(.2, 1.6, .4, 1) both;
 }

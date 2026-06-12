@@ -21,7 +21,9 @@ const state = {
 const audioPlayer = new Audio();
 const audioUrlCache = new Map(); // itemId -> objectURL
 
-// ============ 内蔵イラスト（オリジナルのどうぶつ・著作物なし） ============
+// ============ 内蔵イラスト ============
+// くまさん: オリジナルSVG（Ryoお気に入りのため温存）
+// その他: Kenney Animal Pack Redux（CC0・kenney.nl）の Round (outline) を512pxに事前拡大
 function animalSvg(bg, face) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
     <rect width="100" height="100" fill="${bg}"/>${face}</svg>`;
@@ -39,31 +41,12 @@ const BUILTINS = [
       ${EYES()}<ellipse cx="50" cy="58" rx="4.5" ry="3.5" fill="#3a2a1a"/>
       <path d="M50 62 q-5 6 -9 2 M50 62 q5 6 9 2" stroke="#3a2a1a" stroke-width="2" fill="none" stroke-linecap="round"/>`),
   },
-  {
-    id: "builtin-cat", builtin: true, name: "ねこさん",
-    svg: animalSvg("#dff3ff", `
-      <path d="M22 36 L26 12 L44 26 Z" fill="#8a8a8a"/><path d="M78 36 L74 12 L56 26 Z" fill="#8a8a8a"/>
-      <circle cx="50" cy="54" r="29" fill="#a8a8a8"/>
-      ${EYES(48)}<path d="M46 58 l4 4 l4 -4" stroke="#3a2a1a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-      <path d="M20 52 h16 M20 60 h16 M64 52 h16 M64 60 h16" stroke="#777" stroke-width="2" stroke-linecap="round"/>
-      <ellipse cx="50" cy="55" rx="3.5" ry="2.5" fill="#e88"/>`),
-  },
-  {
-    id: "builtin-rabbit", builtin: true, name: "うさぎさん",
-    svg: animalSvg("#ffe4ef", `
-      <ellipse cx="36" cy="18" rx="9" ry="20" fill="#fff"/><ellipse cx="64" cy="18" rx="9" ry="20" fill="#fff"/>
-      <ellipse cx="36" cy="18" rx="4" ry="13" fill="#ffc4d8"/><ellipse cx="64" cy="18" rx="4" ry="13" fill="#ffc4d8"/>
-      <circle cx="50" cy="56" r="28" fill="#fff"/>
-      ${EYES(50)}<ellipse cx="50" cy="58" rx="3.5" ry="2.5" fill="#e88"/>
-      <path d="M46 64 q4 4 8 0" stroke="#3a2a1a" stroke-width="2" fill="none" stroke-linecap="round"/>`),
-  },
-  {
-    id: "builtin-chick", builtin: true, name: "ひよこさん",
-    svg: animalSvg("#fff7d6", `
-      <circle cx="50" cy="54" r="29" fill="#ffd94d"/>
-      <path d="M46 22 q4 -8 8 0" stroke="#e8b800" stroke-width="3" fill="none" stroke-linecap="round"/>
-      ${EYES(48)}<path d="M44 58 L50 64 L56 58 Z" fill="#ff9c3f"/>`),
-  },
+  { id: "builtin-rabbit",   builtin: true, name: "うさぎさん",  img: "assets/animals/rabbit.png",   bg: "#ffe4ef" },
+  { id: "builtin-chick",    builtin: true, name: "ひよこさん",  img: "assets/animals/chick.png",    bg: "#e3f4ff" },
+  { id: "builtin-dog",      builtin: true, name: "わんわん",    img: "assets/animals/dog.png",      bg: "#fff1d6" },
+  { id: "builtin-penguin",  builtin: true, name: "ぺんぎんさん", img: "assets/animals/penguin.png",  bg: "#e8f0ff" },
+  { id: "builtin-elephant", builtin: true, name: "ぞうさん",    img: "assets/animals/elephant.png", bg: "#e8f4e0" },
+  { id: "builtin-panda",    builtin: true, name: "ぱんださん",  img: "assets/animals/panda.png",    bg: "#ffece3" },
 ];
 
 // ============ IndexedDB ============
@@ -123,13 +106,23 @@ const sparkles = document.getElementById("sparkles");
 
 function renderItem(item) {
   reveal.classList.remove("pop");
-  if (item.builtin) {
+  reveal.style.background = item.bg || "#fff6e3";
+  if (item.builtin && item.svg) {
     reveal.innerHTML = item.svg;
+  } else if (item.builtin && item.img) {
+    // 内蔵イラスト: 顔だけの透過PNGなので contain でパステル背景の中央に置く
+    reveal.innerHTML = "";
+    const img = document.createElement("img");
+    img.src = item.img;
+    img.className = "builtin-img";
+    img.alt = "";
+    img.draggable = false;
+    reveal.appendChild(img);
   } else {
     reveal.innerHTML = "";
     const img = document.createElement("img");
     img.src = getPhotoUrl(item);
-    img.alt = item.name || "";
+    img.alt = "";
     img.draggable = false;
     reveal.appendChild(img);
   }
