@@ -142,10 +142,12 @@ img { pointer-events: none; -webkit-user-drag: none; }
   font-weight: bold;
   color: #7a4a12;
   text-shadow: 0 .4vmin 0 #fff;
+  /* opacity フェードに加えて visibility でも隠す（実機で文字が残る報告への二重化） */
   opacity: 0;
-  transition: opacity .3s;
+  visibility: hidden;
+  transition: opacity .3s, visibility .3s;
 }
-.name-label.show { opacity: 1; }
+.name-label.show { opacity: 1; visibility: visible; }
 
 /* キラキラ */
 #sparkles { position: absolute; inset: 0; pointer-events: none; z-index: 5; }

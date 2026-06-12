@@ -168,8 +168,14 @@ function burstSparkles() {
   }
 }
 
+let swapTimer = null;
+
 function openDoor() {
   state.doorOpen = true;
+  // 閉じアニメ中の再オープンなら、予約済みの中身すり替えをキャンセル
+  // （開いている最中に写真が別人に変わるのを防ぐ。同じ子がもう一度出るのは正しい挙動）
+  clearTimeout(swapTimer);
+  swapTimer = null;
   door.classList.add("open");
   reveal.classList.add("pop");
   burstSparkles();
@@ -177,6 +183,9 @@ function openDoor() {
   if (state.current.name) {
     nameLabel.textContent = state.current.name;
     nameLabel.classList.add("show");
+  } else {
+    nameLabel.textContent = "";
+    nameLabel.classList.remove("show");
   }
 }
 
@@ -184,8 +193,14 @@ function closeDoor() {
   state.doorOpen = false;
   door.classList.remove("open");
   nameLabel.classList.remove("show");
-  // とびらが閉まりきってから次のアイテムを仕込む
-  setTimeout(() => renderItem(nextItem()), 580);
+  // とびらが閉まりきってから次のアイテムを仕込み、文字列自体も消す
+  // （CSSフェードが効かない環境でも文字が残らないように DOM からも空にする）
+  clearTimeout(swapTimer);
+  swapTimer = setTimeout(() => {
+    nameLabel.textContent = "";
+    renderItem(nextItem());
+    swapTimer = null;
+  }, 580);
 }
 
 function onChildTap() {
