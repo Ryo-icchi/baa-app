@@ -21,6 +21,122 @@ const state = {
 const audioPlayer = new Audio();
 const audioUrlCache = new Map(); // itemId -> objectURL
 
+// ============ サウンド（Web Audio で合成・オフライン完結・著作物なし） ============
+// 設計: 飛行機・電車対応のため「音はおまけ」。state.soundOn と iOS の消音スイッチ
+//       両方で止まる（Web Audio は消音スイッチを尊重するので電車では自動で静かになる）。
+let audioCtx = null;
+
+function getAudioCtx() {
+  if (!audioCtx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    try { audioCtx = new AC(); } catch (e) { return null; }
+  }
+  // iOS はユーザー操作内で resume しないと鳴らない（openDoor はタップ起点なのでOK）
+  if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+  return audioCtx;
+}
+
+// 1音（やわらかいベル風: 速い立ち上がり → ゆっくり減衰）
+function playTone(freq, startOffset, dur, peak, type) {
+  const ctx = audioCtx;
+  if (!ctx) return;
+  const t0 = ctx.currentTime + startOffset;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = type || "triangle";
+  osc.frequency.setValueAtTime(freq, t0);
+  gain.gain.setValueAtTime(0.0001, t0);
+  gain.gain.exponentialRampToValueAtTime(peak, t0 + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  osc.connect(gain).connect(ctx.destination);
+  osc.start(t0);
+  osc.stop(t0 + dur + 0.03);
+}
+
+const midiToFreq = (m) => 440 * Math.pow(2, (m - 69) / 12);
+
+// 動物ごとに音程を変えて変化を出す（登録写真は id から決める）
+const ANIMAL_NOTES = {
+  "builtin-bear": 57, "builtin-cat": 64, "builtin-rabbit": 69, "builtin-chick": 76,
+  "builtin-dog": 60, "builtin-penguin": 62, "builtin-elephant": 53, "builtin-panda": 67,
+};
+function noteForItem(item) {
+  if (ANIMAL_NOTES[item.id] != null) return ANIMAL_NOTES[item.id];
+  let h = 0;
+  for (let i = 0; i < item.id.length; i++) h = (h * 31 + item.id.charCodeAt(i)) | 0;
+  const penta = [60, 62, 64, 67, 69];
+  return penta[Math.abs(h) % penta.length];
+}
+
+// とびらが開く「ぽよん」
+function playPop() {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  const t0 = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(380, t0);
+  osc.frequency.exponentialRampToValueAtTime(720, t0 + 0.1);
+  gain.gain.setValueAtTime(0.16, t0);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.16);
+  osc.connect(gain).connect(ctx.destination);
+  osc.start(t0);
+  osc.stop(t0 + 0.18);
+}
+
+// 「ばあ！」明るい上昇アルペジオ（ペンタトニックなので必ず気持ちいい）
+function playRevealJingle(root) {
+  if (!getAudioCtx()) return;
+  [0, 4, 7, 12].forEach((s, i) => // do mi sol do
+    playTone(midiToFreq(root + s), i * 0.075, 0.55, 0.16, "triangle"));
+}
+
+// とびらが閉まる「とん」
+function playCloseSound() {
+  if (!state.soundOn) return;
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  const t0 = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(300, t0);
+  osc.frequency.exponentialRampToValueAtTime(170, t0 + 0.12);
+  gain.gain.setValueAtTime(0.1, t0);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.14);
+  osc.connect(gain).connect(ctx.destination);
+  osc.start(t0);
+  osc.stop(t0 + 0.16);
+}
+
+// 名前のよみあげ（端末に日本語音声があれば。なければ何もしない＝ジングルだけ）
+function speakName(name) {
+  if (!name || !("speechSynthesis" in window)) return;
+  try {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(name);
+    u.lang = "ja-JP";
+    u.rate = 0.95;
+    u.pitch = 1.4; // 高めでかわいく
+    window.speechSynthesis.speak(u);
+  } catch (e) {}
+}
+
+// とびらが開いた瞬間の全サウンド（iOS のジェスチャ要件のため全て同期実行）
+function playOpenSound(item) {
+  if (!state.soundOn) return;
+  playPop();
+  if (!item.builtin && item.audio) {
+    // 親の録音が主役。ジングルは鳴らさず録音だけ（重なり防止）
+    playVoice(item);
+  } else {
+    playRevealJingle(noteForItem(item));
+    if (item.name) speakName(item.name);
+  }
+}
+
 // ============ 内蔵イラスト（すべてオリジナルSVG・くまさんの作画文法で統一） ============
 // 文法: フラット2トーン（体色+明るい差し色）/ 目=黒丸r3.5 / 鼻=黒楕円 /
 //       口=「M x y q-5 6 -9 2」の左右カーブ / 頭=中央の大きな円 / 輪郭線なし
@@ -229,7 +345,7 @@ function openDoor() {
   door.classList.add("open");
   reveal.classList.add("pop");
   burstSparkles();
-  playVoice(state.current);
+  playOpenSound(state.current);
   if (state.current.name) {
     nameLabel.textContent = state.current.name;
     nameLabel.classList.add("show");
@@ -243,6 +359,7 @@ function closeDoor() {
   state.doorOpen = false;
   door.classList.remove("open");
   nameLabel.classList.remove("show");
+  playCloseSound();
   // とびらが閉まりきってから次のアイテムを仕込み、文字列自体も消す
   // （CSSフェードが効かない環境でも文字が残らないように DOM からも空にする）
   clearTimeout(swapTimer);
@@ -316,6 +433,7 @@ const night = document.getElementById("night");
 function enterNight() {
   state.night = true;
   audioPlayer.pause();
+  if ("speechSynthesis" in window) { try { window.speechSynthesis.cancel(); } catch (e) {} }
   night.classList.remove("hidden");
   closeParentPanel();
   const stars = document.getElementById("stars");

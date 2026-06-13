@@ -155,6 +155,39 @@ console.log("10. Service Worker / オフライン資産");
 await sleep(1000);
 check("SW登録成功", await evalJs("navigator.serviceWorker.getRegistration().then(r => !!r)", true));
 
+console.log("11. サウンド");
+check("動物8種すべてに音程が定義されている", await evalJs("BUILTINS.every(b => typeof ANIMAL_NOTES[b.id] === 'number')"));
+check("soundOff時はオシレータを作らない", await evalJs(`(() => {
+  state.soundOn = false;
+  // 既存ctxがあればスパイ、なければ未生成のまま（どちらも0本）
+  let count = 0;
+  if (audioCtx) { const o = audioCtx.createOscillator.bind(audioCtx); audioCtx.createOscillator = () => { count++; return o(); }; }
+  playOpenSound(BUILTINS[0]);
+  return count === 0;
+})()`));
+check("soundOn時は ぽよん+アルペジオ で5本以上のオシレータ", await evalJs(`(() => {
+  state.soundOn = true;
+  const ctx = getAudioCtx();
+  if (!ctx) return false;
+  let count = 0;
+  const o = ctx.createOscillator.bind(ctx);
+  ctx.createOscillator = () => { count++; return o(); };
+  playOpenSound(BUILTINS[0]); // くま（録音なし）→ pop(1) + jingle(4) = 5
+  ctx.createOscillator = o;
+  return count >= 5;
+})()`));
+check("閉じる音も鳴る（オシレータ生成・例外なし）", await evalJs(`(() => {
+  state.soundOn = true;
+  const ctx = getAudioCtx();
+  let count = 0;
+  const o = ctx.createOscillator.bind(ctx);
+  ctx.createOscillator = () => { count++; return o(); };
+  try { playCloseSound(); } catch (e) { return false; }
+  ctx.createOscillator = o;
+  return count === 1;
+})()`));
+check("名前よみあげ関数が例外を投げない", await evalJs("(() => { try { speakName('てすと'); return true; } catch (e) { return false; } })()"));
+
 console.log(`\n結果: ${pass} passed / ${fail} failed`);
 ws.close();
 await fetch(`${CDP}/json/close/${target.id}`).catch(() => {});
