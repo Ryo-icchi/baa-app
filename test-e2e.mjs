@@ -155,18 +155,17 @@ console.log("10. Service Worker / オフライン資産");
 await sleep(1000);
 check("SW登録成功", await evalJs("navigator.serviceWorker.getRegistration().then(r => !!r)", true));
 
-console.log("11. サウンド");
+console.log("11. サウンド（2系統トグル）");
 check("動物8種すべてに音程が定義されている", await evalJs("BUILTINS.every(b => typeof ANIMAL_NOTES[b.id] === 'number')"));
-check("soundOff時はオシレータを作らない", await evalJs(`(() => {
-  state.soundOn = false;
-  // 既存ctxがあればスパイ、なければ未生成のまま（どちらも0本）
+check("両方OFF時はオシレータを作らない", await evalJs(`(() => {
+  state.doorSoundOn = false; state.voiceOn = false; state.deviceMuted = false;
   let count = 0;
   if (audioCtx) { const o = audioCtx.createOscillator.bind(audioCtx); audioCtx.createOscillator = () => { count++; return o(); }; }
   playOpenSound(BUILTINS[0]);
   return count === 0;
 })()`));
-check("soundOn時は ぽよん+アルペジオ で5本以上のオシレータ", await evalJs(`(() => {
-  state.soundOn = true;
+check("ドア音ON時は ぽよん+アルペジオ で5本以上のオシレータ", await evalJs(`(() => {
+  state.doorSoundOn = true; state.voiceOn = true; state.deviceMuted = false;
   const ctx = getAudioCtx();
   if (!ctx) return false;
   let count = 0;
@@ -176,17 +175,64 @@ check("soundOn時は ぽよん+アルペジオ で5本以上のオシレータ",
   ctx.createOscillator = o;
   return count >= 5;
 })()`));
-check("閉じる音も鳴る（オシレータ生成・例外なし）", await evalJs(`(() => {
-  state.soundOn = true;
+check("ドア音OFF・声ONなら内蔵動物のジングルは鳴らない（pop/jingle=0本）", await evalJs(`(() => {
+  state.doorSoundOn = false; state.voiceOn = true; state.deviceMuted = false;
   const ctx = getAudioCtx();
   let count = 0;
   const o = ctx.createOscillator.bind(ctx);
   ctx.createOscillator = () => { count++; return o(); };
-  try { playCloseSound(); } catch (e) { return false; }
+  playOpenSound(BUILTINS[0]);
   ctx.createOscillator = o;
-  return count === 1;
+  return count === 0; // 内蔵動物は録音なし → ジングル(doorSound)もTTSもオシレータは使わない
 })()`));
-check("名前よみあげ関数が例外を投げない", await evalJs("(() => { try { speakName('てすと'); return true; } catch (e) { return false; } })()"));
+check("閉じる音はドア音ONで鳴り、OFFで鳴らない", await evalJs(`(() => {
+  const ctx = getAudioCtx();
+  const o = ctx.createOscillator.bind(ctx);
+  let on = 0, off = 0;
+  state.doorSoundOn = true;
+  ctx.createOscillator = () => { on++; return o(); }; playCloseSound();
+  state.doorSoundOn = false;
+  ctx.createOscillator = () => { off++; return o(); }; playCloseSound();
+  ctx.createOscillator = o;
+  return on === 1 && off === 0;
+})()`));
+check("消音検出時(deviceMuted)はTTSが走らない（例外なし）", await evalJs(`(() => {
+  try { state.voiceOn = true; state.deviceMuted = true; speakName('てすと'); state.deviceMuted = false; return true; }
+  catch (e) { return false; }
+})()`));
+check("名前よみあげ関数が例外を投げない", await evalJs("(() => { try { state.voiceOn = true; speakName('てすと'); return true; } catch (e) { return false; } })()"));
+check("トグルUIが2系統存在する", await evalJs("!!document.getElementById('doorSoundToggle') && !!document.getElementById('voiceToggle')"));
+check("消音検出の無音クリップURLが生成できる", await evalJs("typeof getSilentClipUrl() === 'string' && getSilentClipUrl().startsWith('blob:')"));
+
+console.log("12. スワイプでも開閉できる");
+// 閉じている状態に整える
+await evalJs("if (state.doorOpen) onChildTap();"); await sleep(700);
+check("初期は閉", await evalJs("state.doorOpen === false"));
+// pointerdown → pointermove(>24px) で開く（pointerup は来ない想定＝速いスワイプ）
+await evalJs(`(() => {
+  const st = document.getElementById('stage');
+  st.dispatchEvent(new PointerEvent('pointerdown', { clientX: 100, clientY: 200, bubbles: true }));
+  st.dispatchEvent(new PointerEvent('pointermove', { clientX: 160, clientY: 205, bubbles: true }));
+  return true;
+})()`);
+await sleep(100);
+check("スワイプでとびらが開く（pointerupなしでも）", await evalJs("state.doorOpen === true"));
+// pointerupを送っても二重に閉じない（gestureFiredガード）
+await evalJs(`document.getElementById('stage').dispatchEvent(new PointerEvent('pointerup', { clientX: 160, clientY: 205, bubbles: true }))`);
+await sleep(100);
+check("スワイプ後のpointerupで二重発火しない（開いたまま）", await evalJs("state.doorOpen === true"));
+await sleep(500);
+// 微小な動き(<24px)はスワイプ扱いしない＝タップとして pointerup で閉じる
+await evalJs(`(() => {
+  const st = document.getElementById('stage');
+  st.dispatchEvent(new PointerEvent('pointerdown', { clientX: 100, clientY: 200, bubbles: true }));
+  st.dispatchEvent(new PointerEvent('pointermove', { clientX: 108, clientY: 203, bubbles: true }));
+  st.dispatchEvent(new PointerEvent('pointerup', { clientX: 108, clientY: 203, bubbles: true }));
+  return true;
+})()`);
+await sleep(100);
+check("微小移動はタップ扱いで閉じる", await evalJs("state.doorOpen === false"));
+await sleep(700);
 
 console.log(`\n結果: ${pass} passed / ${fail} failed`);
 ws.close();

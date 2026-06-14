@@ -30,6 +30,9 @@ img { pointer-events: none; -webkit-user-drag: none; }
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  /* スワイプを開閉ジェスチャとして使うため、ブラウザのスクロール/ジェスチャ解釈を無効化。
+     これがないと速いスワイプが scroll とみなされ pointercancel になり開かない端末がある */
+  touch-action: none;
 }
 
 #sky {

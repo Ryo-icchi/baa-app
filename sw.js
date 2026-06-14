@@ -1,5 +1,5 @@
 /* オフライン対応 Service Worker（機内モードでも遊べるように全シェルをキャッシュ） */
-const CACHE = "baa-v5";
+const CACHE = "baa-v6";
 const ASSETS = [
   "./",
   "./index.html",
