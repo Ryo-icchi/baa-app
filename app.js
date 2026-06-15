@@ -18,8 +18,7 @@ const state = {
   busy: false,        // アニメーション中の連打ガード
   // 音は2系統で独立してON/OFFできる
   doorSoundOn: localStorage.getItem("doorSoundOn") !== "0" && !legacySoundOff, // とびらの効果音（ぽよん・ジングル）
-  voiceOn:     localStorage.getItem("voiceOn")     !== "0" && !legacySoundOff, // 音声読み上げ（録音した声・名前）
-  deviceMuted: false, // 消音スイッチ検出の結果（best-effort・fail-open。TTS のマナーモード判定にだけ使う）
+  voiceOn:     localStorage.getItem("voiceOn")     !== "0" && !legacySoundOff, // 親が録音した声
   night: false,
 };
 
@@ -45,48 +44,12 @@ function getAudioCtx() {
   return audioCtx;
 }
 
-// ============ 消音スイッチ検出（best-effort・TTS のマナーモード対応用） ============
-// Web から消音スイッチ状態を読む公式 API は無い（確認済み: Apple 制約）。唯一の手段は
-// 「短い無音クリップを再生 → 終了までの実時間を測る」方式。消音(ringer off)時の iOS は
-// 効果音系の短いクリップを瞬時に消化するため、実尺より大幅に速く終わる＝消音と判定する。
-// 不安定なので fail-open（はっきり速く終わった時だけ muted=true。判定不能なら現状維持）。
-const SILENT_PROBE_DUR = 0.3; // 秒
-let silentClipUrl = null;
-function getSilentClipUrl() {
-  if (silentClipUrl) return silentClipUrl;
-  const sr = 8000, n = Math.floor(sr * SILENT_PROBE_DUR), bytes = 44 + n * 2;
-  const dv = new DataView(new ArrayBuffer(bytes));
-  const w = (o, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
-  w(0, "RIFF"); dv.setUint32(4, bytes - 8, true); w(8, "WAVE"); w(12, "fmt ");
-  dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
-  dv.setUint32(24, sr, true); dv.setUint32(28, sr * 2, true); dv.setUint16(32, 2, true);
-  dv.setUint16(34, 16, true); w(36, "data"); dv.setUint32(40, n * 2, true);
-  // サンプルは全ゼロ＝無音（PCM の既定値のまま）
-  silentClipUrl = URL.createObjectURL(new Blob([dv.buffer], { type: "audio/wav" }));
-  return silentClipUrl;
-}
-
-let lastProbeAt = 0;
-function probeSilentSwitch() {
-  // 連打のたびに鳴らさない（最短1.5秒間隔）。消音スイッチ切替への追従はこの粒度で十分
-  const now = (window.performance ? performance.now() : 0);
-  if (now && now - lastProbeAt < 1500) return;
-  lastProbeAt = now;
-  try {
-    const a = new Audio(getSilentClipUrl());
-    a.volume = 0.001; // 念のため極小（無音クリップなのでそもそも聞こえない）
-    const t0 = now || (window.performance ? performance.now() : 0);
-    const p = a.play();
-    if (!p || !p.then) return;
-    p.then(() => {
-      a.addEventListener("ended", () => {
-        const elapsed = ((window.performance ? performance.now() : 0) - t0) / 1000;
-        // 実尺の半分未満で終わった＝瞬時消化＝消音と判定。それ以外は「鳴った」扱い(fail-open)
-        if (elapsed > 0) state.deviceMuted = elapsed < SILENT_PROBE_DUR * 0.5;
-      }, { once: true });
-    }).catch(() => { /* 自動再生不可など → 判定不能。現状維持(fail-open) */ });
-  } catch (e) { /* 判定不能 → 現状維持 */ }
-}
+// ⚠️ 消音スイッチの「検出」は実装しない（2026-06-15 撤去）。
+// Web から消音状態を読む API は無く、唯一の手段＝HTMLAudio で無音クリップを再生して再生時間を測る、
+// だが HTMLAudio 再生は iOS のオーディオセッションを "playback" カテゴリに切り替え、その副作用で
+// Web Audio 全体が消音スイッチを無視して鳴るようになる（unmute-ios-audio が逆用している挙動）。
+// つまり「検出のための再生」が「マナーモードで止める」目的そのものを破壊する自己矛盾だった。
+// → ドア音・録音声は素の Web Audio に任せて消音スイッチを尊重させる。HTMLAudio はもう使わない。
 
 // 1音（やわらかいベル風: 速い立ち上がり → ゆっくり減衰）
 function playTone(freq, startOffset, dur, peak, type) {
@@ -162,25 +125,14 @@ function playCloseSound() {
   osc.stop(t0 + 0.16);
 }
 
-// 名前のよみあげ（端末に日本語音声があれば。なければ何もしない＝ジングルだけ）
-// ⚠️ iOS の speechSynthesis は消音スイッチを構造的に無視する（Apple 制約）。
-//    マナーモードでも鳴ってしまうため、best-effort の消音検出（state.deviceMuted）でも止める。
-function speakName(name) {
-  if (!name || !state.voiceOn || state.deviceMuted || !("speechSynthesis" in window)) return;
-  try {
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(name);
-    u.lang = "ja-JP";
-    u.rate = 0.95;
-    u.pitch = 1.4; // 高めでかわいく
-    window.speechSynthesis.speak(u);
-  } catch (e) {}
-}
+// ⚠️ TTS（speechSynthesis）による名前読み上げは廃止（2026-06-15・Ryo 決定）。
+// iOS の speechSynthesis は消音スイッチを構造的に無視し（Apple 制約）、Web からは止められないため、
+// 「マナーモードで音がならない」を確実に満たせない。読み上げは Web Audio で鳴る「親の録音した声」だけに統一。
 
-// とびらが開いた瞬間の全サウンド（iOS のジェスチャ要件のため AudioContext は同期で起こす）
-// 「とびらの効果音」と「音声読み上げ」を独立してON/OFFできる:
+// とびらが開いた瞬間のサウンド（iOS のジェスチャ要件のため AudioContext は同期で起こす）。
+// すべて Web Audio 経由 → iOS の消音スイッチ（マナーモード）を尊重して自動で静かになる。
 //  - doorSoundOn: ぽよん(playPop) + ジングル(playRevealJingle)
-//  - voiceOn    : 親の録音した声(playVoice) / 名前のよみあげ(speakName)
+//  - voiceOn    : 親が録音した声(playVoice)
 function playOpenSound(item) {
   // AudioContext をタップ起点で必ず起こす（音が全部OFFでも次に備えて resume）
   getAudioCtx();
@@ -188,15 +140,11 @@ function playOpenSound(item) {
 
   if (state.doorSoundOn) playPop();
 
-  if (hasRecording) {
-    if (state.voiceOn) {
-      playVoice(item); // 録音した声が主役（重なり防止でジングルは鳴らさない）
-    } else if (state.doorSoundOn) {
-      playRevealJingle(noteForItem(item)); // 声OFFのときはジングルで開いた手応えを残す
-    }
-  } else {
-    if (state.doorSoundOn) playRevealJingle(noteForItem(item));
-    if (state.voiceOn && item.name) speakName(item.name);
+  if (hasRecording && state.voiceOn) {
+    playVoice(item); // 録音した声が主役（重なり防止でジングルは鳴らさない）
+  } else if (state.doorSoundOn) {
+    // 録音なし（内蔵動物）or 声OFF → ジングルで開いた手応えを出す
+    playRevealJingle(noteForItem(item));
   }
 }
 
@@ -453,7 +401,6 @@ function onChildTap() {
   if (state.busy) return;
   state.busy = true;
   setTimeout(() => { state.busy = false; }, 350);
-  probeSilentSwitch(); // 次の読み上げに備えて消音状態を更新（タップ＝ユーザー操作なので再生可）
   if (state.doorOpen) closeDoor();
   else openDoor();
 }
@@ -524,7 +471,6 @@ function enterNight() {
   audioPlayer.pause();
   try { if (activeVoiceSrc) activeVoiceSrc.stop(); } catch (e) {}
   activeVoiceSrc = null;
-  if ("speechSynthesis" in window) { try { window.speechSynthesis.cancel(); } catch (e) {} }
   night.classList.remove("hidden");
   closeParentPanel();
   const stars = document.getElementById("stars");

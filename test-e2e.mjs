@@ -155,17 +155,17 @@ console.log("10. Service Worker / オフライン資産");
 await sleep(1000);
 check("SW登録成功", await evalJs("navigator.serviceWorker.getRegistration().then(r => !!r)", true));
 
-console.log("11. サウンド（2系統トグル）");
+console.log("11. サウンド（2系統トグル・全てWeb Audio経由）");
 check("動物8種すべてに音程が定義されている", await evalJs("BUILTINS.every(b => typeof ANIMAL_NOTES[b.id] === 'number')"));
 check("両方OFF時はオシレータを作らない", await evalJs(`(() => {
-  state.doorSoundOn = false; state.voiceOn = false; state.deviceMuted = false;
+  state.doorSoundOn = false; state.voiceOn = false;
   let count = 0;
   if (audioCtx) { const o = audioCtx.createOscillator.bind(audioCtx); audioCtx.createOscillator = () => { count++; return o(); }; }
   playOpenSound(BUILTINS[0]);
   return count === 0;
 })()`));
 check("ドア音ON時は ぽよん+アルペジオ で5本以上のオシレータ", await evalJs(`(() => {
-  state.doorSoundOn = true; state.voiceOn = true; state.deviceMuted = false;
+  state.doorSoundOn = true; state.voiceOn = true;
   const ctx = getAudioCtx();
   if (!ctx) return false;
   let count = 0;
@@ -175,15 +175,15 @@ check("ドア音ON時は ぽよん+アルペジオ で5本以上のオシレー�
   ctx.createOscillator = o;
   return count >= 5;
 })()`));
-check("ドア音OFF・声ONなら内蔵動物のジングルは鳴らない（pop/jingle=0本）", await evalJs(`(() => {
-  state.doorSoundOn = false; state.voiceOn = true; state.deviceMuted = false;
+check("ドア音OFF・声ONでも内蔵動物は無音（録音なし＝TTS廃止後はジングルもpopも無し）", await evalJs(`(() => {
+  state.doorSoundOn = false; state.voiceOn = true;
   const ctx = getAudioCtx();
   let count = 0;
   const o = ctx.createOscillator.bind(ctx);
   ctx.createOscillator = () => { count++; return o(); };
   playOpenSound(BUILTINS[0]);
   ctx.createOscillator = o;
-  return count === 0; // 内蔵動物は録音なし → ジングル(doorSound)もTTSもオシレータは使わない
+  return count === 0;
 })()`));
 check("閉じる音はドア音ONで鳴り、OFFで鳴らない", await evalJs(`(() => {
   const ctx = getAudioCtx();
@@ -196,13 +196,9 @@ check("閉じる音はドア音ONで鳴り、OFFで鳴らない", await evalJs(`
   ctx.createOscillator = o;
   return on === 1 && off === 0;
 })()`));
-check("消音検出時(deviceMuted)はTTSが走らない（例外なし）", await evalJs(`(() => {
-  try { state.voiceOn = true; state.deviceMuted = true; speakName('てすと'); state.deviceMuted = false; return true; }
-  catch (e) { return false; }
-})()`));
-check("名前よみあげ関数が例外を投げない", await evalJs("(() => { try { state.voiceOn = true; speakName('てすと'); return true; } catch (e) { return false; } })()"));
+check("TTS(speakName)は撤去済み・消音検出も撤去済み", await evalJs("typeof speakName === 'undefined' && typeof probeSilentSwitch === 'undefined' && typeof state.deviceMuted === 'undefined'"));
+check("子ども層の声再生はWeb Audio（playVoiceがcreateBufferSourceを使いaudioPlayerを使わない）", await evalJs("playVoice.toString().includes('createBufferSource') && !playVoice.toString().includes('audioPlayer')"));
 check("トグルUIが2系統存在する", await evalJs("!!document.getElementById('doorSoundToggle') && !!document.getElementById('voiceToggle')"));
-check("消音検出の無音クリップURLが生成できる", await evalJs("typeof getSilentClipUrl() === 'string' && getSilentClipUrl().startsWith('blob:')"));
 
 console.log("12. スワイプでも開閉できる");
 // 閉じている状態に整える
